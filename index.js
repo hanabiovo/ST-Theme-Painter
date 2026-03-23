@@ -1,4 +1,4 @@
-// Theme Painter · 底图配色生成器
+// Theme Painter · 改色盒子
 // 基于"双色盒子"浅色版结构，使用酒馆当前 API 进行图片视觉分析
 
 import { getContext, extension_settings } from '../../../extensions.js';
@@ -1858,5 +1858,5 @@ $(document).ready(() => {
         }
     }
     tryInject();
-    console.log('[Theme Painter] 底图配色生成器已加载');
+    console.log('[Theme Painter] 改色盒子已加载');
 });
