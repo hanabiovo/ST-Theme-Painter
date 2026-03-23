@@ -1,0 +1,226 @@
+/* ── Theme Painter · 改色盒子 ── */
+
+#theme-painter-panel {
+    margin-top: 16px;
+    border: 1px solid var(--SmartThemeBorderColor, rgba(0,0,0,0.12));
+    border-radius: 8px;
+    background: var(--SmartThemeBlurTintColor, #fff);
+    overflow: hidden;
+}
+
+/* ── 标题栏 ── */
+.tp-toggle-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 14px;
+    cursor: pointer;
+    user-select: none;
+    border-bottom: 1px solid transparent;
+    transition: background 0.15s;
+}
+
+.tp-toggle-header:hover {
+    background: rgba(128,128,128,0.06);
+}
+
+.tp-title-left {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+}
+
+.tp-title-icon {
+    color: var(--SmartThemeQuoteColor, #888);
+    font-size: 0.9em;
+    opacity: 0.8;
+}
+
+.tp-title-text {
+    font-size: 0.88em;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    color: var(--SmartThemeBodyColor, #333);
+}
+
+.tp-title-text em {
+    font-style: normal;
+    font-weight: 400;
+    opacity: 0.6;
+    font-size: 0.95em;
+}
+
+.tp-chevron {
+    font-size: 0.7em;
+    opacity: 0.45;
+    transition: transform 0.2s ease;
+}
+
+.tp-chevron-open {
+    transform: rotate(180deg);
+}
+
+/* ── 面板主体 ── */
+#tp-body {
+    padding: 12px 14px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+/* ── 区块通用 ── */
+.tp-section {
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+}
+
+/* ── 区块一：输入 ── */
+.tp-row {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+}
+
+#tp-image-url {
+    flex: 1;
+    font-size: 0.84em;
+}
+
+.tp-icon-btn {
+    flex-shrink: 0;
+    padding: 5px 10px !important;
+    font-size: 0.95em !important;
+}
+
+.tp-analyze-btn {
+    width: 100%;
+    font-size: 0.86em !important;
+    padding: 6px 0 !important;
+    letter-spacing: 0.03em;
+}
+
+.tp-analyze-btn:not(:disabled) {
+    background: color-mix(in srgb, var(--SmartThemeQuoteColor, #7c9) 18%, var(--SmartThemeBlurTintColor, #fff)) !important;
+    border-color: color-mix(in srgb, var(--SmartThemeQuoteColor, #7c9) 35%, transparent) !important;
+}
+
+/* ── 区块二：预览 ── */
+.tp-preview-wrap {
+    position: relative;
+    border-radius: 6px;
+    overflow: hidden;
+    border: 1px solid var(--SmartThemeBorderColor, rgba(0,0,0,0.1));
+}
+
+#tp-preview-img {
+    width: 100%;
+    max-height: 130px;
+    object-fit: cover;
+    display: none;
+    vertical-align: bottom;
+}
+
+#tp-palette {
+    display: flex;
+    width: 100%;
+    height: 22px;
+}
+
+#tp-palette:empty {
+    display: none;
+}
+
+.tp-swatch {
+    flex: 1;
+    height: 100%;
+    border: none;
+    border-right: 1px solid rgba(255,255,255,0.15);
+    cursor: help;
+    transition: flex 0.2s;
+}
+
+.tp-swatch:last-child {
+    border-right: none;
+}
+
+.tp-swatch:hover {
+    flex: 1.6;
+}
+
+.tp-status {
+    font-size: 0.78em;
+    color: var(--SmartThemeQuoteColor, #888);
+    min-height: 1.3em;
+    line-height: 1.6;
+}
+
+.tp-log-line {
+    line-height: 1.6;
+}
+
+.tp-log-line.error {
+    color: #e05252;
+}
+
+.tp-log-line.warn {
+    color: #c8882a;
+}
+
+/* ── 区块三：输出 ── */
+.tp-output-row {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.tp-name-input {
+    width: 7em !important;
+    flex-shrink: 0;
+    font-size: 0.84em;
+}
+
+.tp-output-row .menu_button {
+    flex: 1;
+    font-size: 0.8em !important;
+    padding: 5px 8px !important;
+    white-space: nowrap;
+}
+
+#tp-css-output-wrap {
+    display: none;
+    margin-top: 2px;
+}
+
+#tp-css-output {
+    width: 100%;
+    height: 150px;
+    font-size: 0.74em;
+    font-family: monospace;
+    resize: vertical;
+    box-sizing: border-box;
+}
+
+#tp-copy-css {
+    margin-top: 5px;
+    font-size: 0.82em;
+    width: 100%;
+}
+
+/* ── Spinner ── */
+.tp-spinner {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border: 1.5px solid currentColor;
+    border-top-color: transparent;
+    border-radius: 50%;
+    animation: tp-spin 0.7s linear infinite;
+    vertical-align: middle;
+    margin-right: 3px;
+}
+
+@keyframes tp-spin {
+    to { transform: rotate(360deg); }
+}

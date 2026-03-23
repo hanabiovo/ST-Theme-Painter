@@ -1,0 +1,12 @@
+{
+    "display_name": "Theme Painter · 底图配色生成器",
+    "loading_order": 80,
+    "requires": [],
+    "optional": [],
+    "js": "index.js",
+    "css": "style.css",
+    "author": "for Hana",
+    "version": "1.0.0",
+    "homePage": "",
+    "auto_update": false
+}
