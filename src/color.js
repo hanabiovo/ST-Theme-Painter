@@ -231,9 +231,164 @@ function formatSampleColor(c) {
     return {
         hex: c.hex,
         rgb: `rgb(${c.r}, ${c.g}, ${c.b})`,
+        r: c.r,
+        g: c.g,
+        b: c.b,
+        hue: c.hue,
         ratio: Math.round(c.ratio * 100),
         saturation: Math.round(c.saturation * 100),
         lightness: Math.round(c.lightness * 100),
+    };
+}
+
+/** HSL（h: 0-360, s: 0-1, l: 0-1）转 RGB */
+export function hslToRgb(h, s, l) {
+    const hn = ((h % 360) + 360) % 360;
+    const c = (1 - Math.abs(2 * l - 1)) * s;
+    const x = c * (1 - Math.abs(((hn / 60) % 2) - 1));
+    const m = l - c / 2;
+    let r = 0, g = 0, b = 0;
+
+    if (hn < 60) { r = c; g = x; }
+    else if (hn < 120) { r = x; g = c; }
+    else if (hn < 180) { g = c; b = x; }
+    else if (hn < 240) { g = x; b = c; }
+    else if (hn < 300) { r = x; b = c; }
+    else { r = c; b = x; }
+
+    return {
+        r: Math.round((r + m) * 255),
+        g: Math.round((g + m) * 255),
+        b: Math.round((b + m) * 255),
+        a: 1,
+    };
+}
+
+function hueDistance(h1, h2) {
+    const d = Math.abs(h1 - h2) % 360;
+    return d > 180 ? 360 - d : d;
+}
+
+/** 根据色相、饱和度和明暗模式，给离线生成的主题起一个克制的中文意境名 */
+function pickLocalThemeName(hue, sat, mode) {
+    if (sat < 0.12) {
+        return mode === 'light' ? '素笺' : '墨影';
+    }
+    const isLight = mode === 'light';
+    if (hue < 18 || hue >= 342) return isLight ? '绯霞' : '绛夜';
+    if (hue < 45) return isLight ? '暖杏' : '琥珀';
+    if (hue < 75) return isLight ? '鹅黄' : '鎏金';
+    if (hue < 150) return isLight ? '竹露' : '松烟';
+    if (hue < 195) return isLight ? '青岚' : '沧溟';
+    if (hue < 240) return isLight ? '晴空' : '深海';
+    if (hue < 285) return isLight ? '暮岚' : '星夜';
+    return isLight ? '樱雾' : '紫宸';
+}
+
+/**
+ * 调整 HSL 亮度直到与背景色满足目标 WCAG 对比度
+ */
+function ensureContrastColor(hue, sat, startLightness, bgRgb, targetRatio, preferDarker) {
+    let l = clamp(startLightness, 0.08, 0.94);
+    let best = hslToRgb(hue, sat, l);
+    let bestRatio = contrastRatio(best, bgRgb);
+
+    for (let step = 0; step < 24 && bestRatio < targetRatio; step++) {
+        l = preferDarker ? Math.max(0.08, l - 0.03) : Math.min(0.94, l + 0.03);
+        const candidate = hslToRgb(hue, sat, l);
+        const ratio = contrastRatio(candidate, bgRgb);
+        if (ratio > bestRatio) {
+            best = candidate;
+            bestRatio = ratio;
+        }
+    }
+    return best;
+}
+
+/**
+ * 纯本地算法配色引擎（零 API 消耗、自动保障 WCAG 对比度）
+ * @param {object} sampleData extractImageColors 返回的采样结果
+ * @param {'auto'|'light'|'dark'} stylePreference
+ */
+export function generateLocalPalette(sampleData, stylePreference = 'auto') {
+    if (!sampleData || !sampleData.dominantColors?.length) {
+        throw new Error('缺少本地像素采样数据（若使用外链且图床禁止跨域，请改用「当前背景」或「本地图」）');
+    }
+
+    const mode = stylePreference === 'auto'
+        ? (sampleData.suggestedMode || 'light')
+        : stylePreference;
+    const isLight = mode === 'light';
+
+    // 选主色：优先选面积较大且有一定彩度的颜色，避免整张图被大面积白/黑吞掉主色相
+    const chromaticDominant = sampleData.dominantColors.find(c => c.saturation >= 14);
+    const primary = chromaticDominant || sampleData.dominantColors[0];
+    const h1 = primary.hue ?? 220;
+    const s1 = clamp((primary.saturation ?? 20) / 100, 0, 1);
+
+    // 选第二点缀色：优先从高饱和点缀池挑一个与主色色相拉开距离的颜色；单色图则用邻近色微偏移
+    const accentCandidate = (sampleData.accentColors || []).find(c => hueDistance(c.hue, h1) >= 24)
+        || sampleData.dominantColors.find(c => hueDistance(c.hue, h1) >= 24 && c.saturation >= 16)
+        || (sampleData.accentColors || [])[0];
+    const h2 = accentCandidate ? accentCandidate.hue : (h1 + 28) % 360;
+    const s2 = accentCandidate ? clamp(accentCandidate.saturation / 100, 0.25, 0.8) : clamp(s1 + 0.12, 0.25, 0.65);
+
+    // 1. UI 菜单底色（柔和同色系底色）
+    const bgS = s1 < 0.1 ? s1 * 0.5 : clamp(s1 * 0.34, 0.06, 0.24);
+    const bgL = isLight ? 0.94 : 0.13;
+    const bgRgb = hslToRgb(h1, bgS, bgL);
+    const blurTint = toRgba(bgRgb, isLight ? 0.92 : 0.93);
+
+    // 2. 正文文本色（带极轻微主色相的高对比度墨色/米白）
+    const textS = s1 < 0.1 ? 0.02 : clamp(s1 * 0.22, 0.05, 0.16);
+    const mainTextRgb = ensureContrastColor(h1, textS, isLight ? 0.17 : 0.92, bgRgb, 7.0, isLight);
+    const mainText = toRgba(mainTextRgb, 1);
+
+    // 3. 次级/斜体文字色
+    const subTextRgb = ensureContrastColor(h1, textS, isLight ? 0.36 : 0.74, bgRgb, 4.5, isLight);
+    const italicsText = toRgba(subTextRgb, 0.82);
+
+    // 4. 引用/主色调（标题星号、滚动条、高亮）
+    const quoteS = s1 < 0.1 ? 0.08 : clamp(s1 * 0.9, 0.3, 0.66);
+    const quoteRgb = ensureContrastColor(h1, quoteS, isLight ? 0.44 : 0.68, bgRgb, 4.2, isLight);
+    const quoteText = toRgba(quoteRgb, 1);
+
+    // 5. 点缀色（渐变另一端、下划线）
+    const underS = s1 < 0.1 ? 0.1 : clamp(s2 * 0.9, 0.32, 0.72);
+    const underRgb = ensureContrastColor(h2, underS, isLight ? 0.48 : 0.66, bgRgb, 3.2, isLight);
+    const underlineText = toRgba(underRgb, 0.85);
+
+    // 6. 聊天背景遮罩与模糊强度（根据画面反差离散度自动判断）
+    const std = sampleData.brightnessStdDev ?? 0;
+    let chatTint = 'rgba(0, 0, 0, 0)';
+    let blurStrength = 0;
+    if (std > 0.30) {
+        chatTint = toRgba(bgRgb, 0.24);
+        blurStrength = 2;
+    } else if (std > 0.22) {
+        chatTint = toRgba(bgRgb, 0.14);
+        blurStrength = 1;
+    }
+
+    // 7. 阴影/代码块底色
+    const shadowRgb = hslToRgb(h1, clamp(bgS, 0.04, 0.18), isLight ? 0.26 : 0.06);
+    const shadowColor = toRgba(shadowRgb, isLight ? 0.22 : 0.3);
+
+    return {
+        name: pickLocalThemeName(h1, s1, mode),
+        mode,
+        blur_strength: blurStrength,
+        main_text_color: mainText,
+        italics_text_color: italicsText,
+        underline_text_color: underlineText,
+        quote_text_color: quoteText,
+        blur_tint_color: blurTint,
+        chat_tint_color: chatTint,
+        user_mes_blur_tint_color: 'rgba(0, 0, 0, 0)',
+        bot_mes_blur_tint_color: 'rgba(0, 0, 0, 0)',
+        shadow_color: shadowColor,
+        border_color: 'rgba(0, 0, 0, 0)',
+        overlay_color: '',
     };
 }
 

@@ -87,38 +87,38 @@
     font-size: 0.84em;
 }
 
-.tp-icon-btn {
+.tp-short-btn {
     flex-shrink: 0;
-    padding: 5px 9px !important;
-    font-size: 0.9em !important;
+    padding: 5px 10px !important;
+    font-size: 0.8em !important;
+    white-space: nowrap;
+}
+
+.tp-source-row {
+    display: flex;
+    gap: 6px;
+}
+
+.tp-source-row .menu_button {
+    flex: 1;
+    font-size: 0.8em !important;
+    padding: 5px 8px !important;
+    white-space: nowrap;
 }
 
 .tp-options-row {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    gap: 8px;
+    gap: 6px;
     flex-wrap: wrap;
 }
 
 .tp-select {
     font-size: 0.8em !important;
-    padding: 3px 6px !important;
+    padding: 4px 6px !important;
     margin: 0 !important;
     flex: 1;
-    min-width: 110px;
-}
-
-.tp-checkbox-label {
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-    font-size: 0.8em;
-    color: var(--SmartThemeBodyColor, #444);
-    opacity: 0.85;
-    cursor: pointer;
-    user-select: none;
-    white-space: nowrap;
+    min-width: 120px;
 }
 
 .tp-analyze-btn {

@@ -1,6 +1,6 @@
 // Theme Painter · 提示词构建、视觉读取、稳健 JSON 解析与配色生成
 
-import { extractImageColors, normalizeAndValidatePalette } from './color.js';
+import { extractImageColors, generateLocalPalette, normalizeAndValidatePalette } from './color.js';
 
 const BASE_SYSTEM_PROMPT =
     '你是一位有审美品位的界面设计师，擅长根据图片色彩数据与氛围生成高可读性的网页配色方案。只输出严格合法的 JSON，不要输出思考过程、解释或 Markdown 代码块。';
@@ -276,21 +276,19 @@ export async function callMultimodalCaption(base64Img, prompt, deps) {
 }
 
 /**
- * 完整分析流程：Canvas 像素取色 -> 可选视觉氛围补充 -> generateRaw 生成配色 -> 规范化与自检
+ * 完整分析流程，支持三种配色引擎：
+ * - 'local'：纯本地 Canvas 像素取色 + 色彩学算法（零 API 费用、0 延迟）
+ * - 'vision'：复用酒馆「图片注解」的低价多模态模型，看图一步直出 JSON（完全不消耗主 API）
+ * - 'main_api'：Canvas 像素取色后交由酒馆当前主 API 搭配
  */
 export async function analyzeImagePalette({
     imageSource,
     imgEl,
     stylePreference = 'auto',
-    useVision = false,
+    engine = 'local',
     deps,
     onLog = () => {},
 }) {
-    const context = deps.getContext();
-    if (typeof context?.generateRaw !== 'function') {
-        throw new Error('当前 SillyTavern 版本不支持 generateRaw，请更新酒馆');
-    }
-
     // 第一步：Canvas 本地精准取色（零网络开销、无 API 依赖）
     onLog('正在采样图片像素色彩…', 'loading', 'step-canvas');
     const sampleData = extractImageColors(imgEl);
@@ -298,36 +296,49 @@ export async function analyzeImagePalette({
         const hexPreview = sampleData.dominantColors.slice(0, 4).map(c => c.hex).join(' ');
         onLog(`✓ 像素取色完成（明度 ${Math.round(sampleData.avgBrightness * 100)}%，主色 ${hexPreview}）`, 'ok', 'step-canvas');
     } else {
-        onLog('⚠ 外链图床限制跨域读取，跳过本地像素采样', 'warn', 'step-canvas');
+        onLog('⚠ 外链图床限制跨域读取，无法进行本地像素采样', 'warn', 'step-canvas');
     }
 
-    // 第二步：视觉模型氛围识别（用户勾选，或本地取色受 CORS 阻断时自动尝试兜底）
-    let visionDescription = '';
-    const shouldTryVision = useVision || !sampleData;
-    if (shouldTryVision) {
-        const captionConfigured = deps.extension_settings?.caption?.source === 'multimodal';
-        if (!useVision && !captionConfigured) {
-            onLog('提示：若想获得更精准取色，建议使用「当前背景」或「本地图片」', 'warn', 'step-vision');
-        } else {
-            onLog('正在调用视觉模型识别画面氛围…', 'loading', 'step-vision');
-            try {
-                const base64 = await imageToBase64(imageSource, imgEl);
-                const visionPrompt =
-                    '请简洁描述这张图片的视觉氛围、光线明暗、色彩情绪以及适合起什么 1-2 字的中文意境主题名。不要输出多余寒暄。';
-                visionDescription = await callMultimodalCaption(base64, visionPrompt, deps);
-                onLog('✓ 视觉氛围识别完成', 'ok', 'step-vision');
-            } catch (err) {
-                console.warn('[Theme Painter] 视觉识别跳过：', err);
-                onLog(`⚠ 视觉识别跳过（${err.message}），继续使用已有信息生成`, 'warn', 'step-vision');
-            }
+    // ── 模式一：纯本地离线秒生 ──
+    if (engine === 'local') {
+        onLog('正在用本地色彩算法生成方案…', 'loading', 'step-gen');
+        const rawPalette = generateLocalPalette(sampleData, stylePreference);
+        const { palette, warnings } = normalizeAndValidatePalette(rawPalette);
+        onLog('✓ 本地离线配色完成（未消耗任何 API）', 'ok', 'step-gen');
+        return { palette, warnings, sampleData };
+    }
+
+    // ── 模式二：图片注解视觉模型一步直出（不消耗主 API）──
+    if (engine === 'vision') {
+        onLog('正在调用「图片注解」视觉模型看图生成配色（不消耗主 API）…', 'loading', 'step-gen');
+        const base64 = await imageToBase64(imageSource, imgEl);
+        const prompt = buildAnalysisPrompt({
+            sampleData,
+            visionDescription: '',
+            imageHint: imageSource?.startsWith('data:') ? '本地上传图片' : imageSource,
+            stylePreference,
+        });
+        const fullVisionPrompt = `${BASE_SYSTEM_PROMPT}\n\n${prompt}`;
+        const result = await callMultimodalCaption(base64, fullVisionPrompt, deps);
+        if (!result) {
+            throw new Error('视觉模型未返回内容，请检查「图片注解」里的模型配置');
         }
+        const rawPalette = extractJsonFromText(result);
+        const { palette, warnings } = normalizeAndValidatePalette(rawPalette);
+        onLog('✓ 视觉模型配色生成完成', 'ok', 'step-gen');
+        return { palette, warnings, sampleData };
     }
 
-    // 第三步：调用当前聊天模型生成配色 JSON
-    onLog('正在生成配色方案…', 'loading', 'step-gen');
+    // ── 模式三：主聊天 API 生成 ──
+    const context = deps.getContext();
+    if (typeof context?.generateRaw !== 'function') {
+        throw new Error('当前 SillyTavern 版本不支持 generateRaw，请更新酒馆');
+    }
+
+    onLog('正在调用主 API 生成配色方案…', 'loading', 'step-gen');
     const prompt = buildAnalysisPrompt({
         sampleData,
-        visionDescription,
+        visionDescription: '',
         imageHint: imageSource?.startsWith('data:') ? '本地上传图片' : imageSource,
         stylePreference,
     });
@@ -338,12 +349,12 @@ export async function analyzeImagePalette({
     });
 
     if (!result) {
-        throw new Error('模型未返回内容，请检查当前 API 连接是否正常');
+        throw new Error('主 API 未返回内容，请检查当前连接是否正常');
     }
 
     const rawPalette = extractJsonFromText(result);
     const { palette, warnings } = normalizeAndValidatePalette(rawPalette);
-    onLog('✓ 配色方案生成完成', 'ok', 'step-gen');
+    onLog('✓ 主 API 配色生成完成', 'ok', 'step-gen');
 
     return { palette, warnings, sampleData };
 }

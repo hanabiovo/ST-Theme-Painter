@@ -278,29 +278,33 @@ function renderPanel() {
             <!-- 区块一：图片来源与选项 -->
             <div class="tp-section tp-input-section">
                 <div class="tp-row">
-                    <input id="tp-image-url" class="text_pole" type="text" placeholder="粘贴图片直链，或右侧选当前背景 / 本地图…" />
-                    <button id="tp-load-preview" class="menu_button tp-icon-btn" title="载入直链预览">
-                        <i class="fa-solid fa-cloud-arrow-down"></i>
+                    <input id="tp-image-url" class="text_pole" type="text" placeholder="粘贴图片直链…" />
+                    <button id="tp-load-preview" class="menu_button tp-short-btn" title="载入直链预览">
+                        <i class="fa-solid fa-cloud-arrow-down"></i> 载入
                     </button>
-                    <button id="tp-use-current-bg" class="menu_button tp-icon-btn" title="读取酒馆当前背景图">
-                        <i class="fa-solid fa-image"></i>
+                </div>
+
+                <div class="tp-source-row">
+                    <button id="tp-use-current-bg" class="menu_button" title="读取酒馆当前背景图">
+                        <i class="fa-solid fa-image"></i> 当前背景
                     </button>
-                    <button id="tp-upload-btn" class="menu_button tp-icon-btn" title="从本地选择图片">
-                        <i class="fa-solid fa-folder-open"></i>
+                    <button id="tp-upload-btn" class="menu_button" title="从本地相册或文件选择图片">
+                        <i class="fa-solid fa-folder-open"></i> 本地选图
                     </button>
                     <input id="tp-file-input" type="file" accept="image/*" style="display:none" />
                 </div>
 
                 <div class="tp-options-row">
+                    <select id="tp-engine" class="text_pole tp-select" title="选择配色生成方式">
+                        <option value="local">引擎：纯本地（免费秒出）</option>
+                        <option value="vision">引擎：图片注解视觉（省主API）</option>
+                        <option value="main_api">引擎：当前主 API</option>
+                    </select>
                     <select id="tp-style-pref" class="text_pole tp-select" title="界面明暗风格倾向">
                         <option value="auto">明暗：自动判断</option>
                         <option value="light">明暗：浅色界面</option>
                         <option value="dark">明暗：深色界面</option>
                     </select>
-                    <label class="tp-checkbox-label" title="默认已使用本地像素精准取色；勾选后会额外调用 Image Captioning 视觉模型理解画面氛围（需先在扩展中配置 Multimodal）">
-                        <input id="tp-use-vision" type="checkbox" />
-                        <span>视觉氛围增强</span>
-                    </label>
                 </div>
 
                 <button id="tp-analyze" class="menu_button tp-analyze-btn" disabled>
@@ -418,14 +422,14 @@ function bindEvents() {
 
         const imgEl = document.getElementById('tp-preview-img');
         const stylePreference = String($('#tp-style-pref').val() || 'auto');
-        const useVision = $('#tp-use-vision').is(':checked');
+        const engine = String($('#tp-engine').val() || 'local');
 
         try {
             const { palette, warnings } = await analyzeImagePalette({
                 imageSource: currentImageSource,
                 imgEl,
                 stylePreference,
-                useVision,
+                engine,
                 deps: ST_DEPS,
                 onLog: (msg, type, id) => appendLog(msg, type, id),
             });
