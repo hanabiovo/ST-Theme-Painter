@@ -148,14 +148,17 @@ function renderSwatches(palette) {
 function showValidationResult(warnings, isManualEdit = false) {
     clearLog();
     warnings.forEach(w => appendLog(`⚠ ${w}`, 'warn'));
+    const blurInfo = currentPalette ? `，模糊度 ${currentPalette.blur_strength ?? 0}` : '';
     if (warnings.length > 0) {
         appendLog(
-            `${isManualEdit ? '微调后' : '自检完成'}，共 ${warnings.length} 条提醒（点击上方色块可微调）`,
+            `${isManualEdit ? '微调后' : '自检完成'}，共 ${warnings.length} 条提醒${blurInfo}（点击色块可微调）`,
             'warn'
         );
     } else {
         appendLog(
-            isManualEdit ? '✓ 微调后自检通过' : '✓ 自检通过（点击色块可微调颜色）',
+            isManualEdit
+                ? `✓ 微调后自检通过${blurInfo}`
+                : `✓ 自检通过${blurInfo}（点击色块可微调）`,
             'ok'
         );
     }

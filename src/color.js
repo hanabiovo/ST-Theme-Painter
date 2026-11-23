@@ -135,7 +135,7 @@ export function extractImageColors(imgEl) {
     try {
         ctx.drawImage(imgEl, 0, 0, width, height);
         const { data } = ctx.getImageData(0, 0, width, height);
-        return analyzePixelBuffer(data);
+        return analyzePixelBuffer(data, width, height);
     } catch {
         // 跨域未授权导致 canvas tainted
         return null;
@@ -143,10 +143,12 @@ export function extractImageColors(imgEl) {
 }
 
 /**
- * 纯函数：从 RGBA 像素数组提取主色、点缀色、明暗度与对比度离散度
+ * 纯函数：从 RGBA 像素数组提取主色、点缀色、明暗度、对比度离散度与纹理复杂度
  * @param {Uint8ClampedArray | number[]} data
+ * @param {number} [width]
+ * @param {number} [height]
  */
-export function analyzePixelBuffer(data) {
+export function analyzePixelBuffer(data, width = 0, height = 0) {
     const buckets = new Map();
     let totalPixels = 0;
     let sumLuma = 0;
@@ -186,6 +188,40 @@ export function analyzePixelBuffer(data) {
 
     if (totalPixels === 0) return null;
 
+    // 计算相邻像素平均色差（衡量画面纹理/线条花哨程度，0 ~ 1）
+    let edgeComplexity = 0;
+    if (width > 1 && height > 1 && data.length >= width * height * 4) {
+        let diffSum = 0;
+        let pairCount = 0;
+        for (let y = 0; y < height - 1; y++) {
+            for (let x = 0; x < width - 1; x++) {
+                const idx = (y * width + x) * 4;
+                if (data[idx + 3] < 128) continue;
+                const right = idx + 4;
+                const down = idx + width * 4;
+                if (data[right + 3] >= 128) {
+                    diffSum += (
+                        Math.abs(data[idx] - data[right]) +
+                        Math.abs(data[idx + 1] - data[right + 1]) +
+                        Math.abs(data[idx + 2] - data[right + 2])
+                    ) / 765;
+                    pairCount++;
+                }
+                if (data[down + 3] >= 128) {
+                    diffSum += (
+                        Math.abs(data[idx] - data[down]) +
+                        Math.abs(data[idx + 1] - data[down + 1]) +
+                        Math.abs(data[idx + 2] - data[down + 2])
+                    ) / 765;
+                    pairCount++;
+                }
+            }
+        }
+        if (pairCount > 0) {
+            edgeComplexity = diffSum / pairCount;
+        }
+    }
+
     const avgBrightness = sumLuma / totalPixels;
     const variance = Math.max(0, sumLumaSq / totalPixels - avgBrightness * avgBrightness);
     const brightnessStdDev = Math.sqrt(variance);
@@ -221,6 +257,7 @@ export function analyzePixelBuffer(data) {
     return {
         avgBrightness: round2(avgBrightness),
         brightnessStdDev: round2(brightnessStdDev),
+        edgeComplexity: round3(edgeComplexity),
         suggestedMode: avgBrightness >= 0.52 ? 'light' : 'dark',
         dominantColors: dominantColors.map(formatSampleColor),
         accentColors: accentColors.map(formatSampleColor),
@@ -358,15 +395,23 @@ export function generateLocalPalette(sampleData, stylePreference = 'auto') {
     const underRgb = ensureContrastColor(h2, underS, isLight ? 0.48 : 0.66, bgRgb, 3.2, isLight);
     const underlineText = toRgba(underRgb, 0.85);
 
-    // 6. 聊天背景遮罩与模糊强度（根据画面反差离散度自动判断）
+    // 6. 聊天背景遮罩与模糊强度（结合纹理花哨度 + 明暗反差，克制在 0-4 区间，避免过糊）
     const std = sampleData.brightnessStdDev ?? 0;
+    const edge = sampleData.edgeComplexity ?? 0;
+    const busyness = edge * 6.5 + Math.max(0, std - 0.12) * 1.4;
+
     let chatTint = 'rgba(0, 0, 0, 0)';
     let blurStrength = 0;
-    if (std > 0.30) {
-        chatTint = toRgba(bgRgb, 0.24);
+    if (busyness >= 1.05) {
+        blurStrength = 4;
+        chatTint = toRgba(bgRgb, 0.26);
+    } else if (busyness >= 0.72) {
+        blurStrength = 3;
+        chatTint = toRgba(bgRgb, 0.20);
+    } else if (busyness >= 0.45) {
         blurStrength = 2;
-    } else if (std > 0.22) {
-        chatTint = toRgba(bgRgb, 0.14);
+        chatTint = toRgba(bgRgb, 0.12);
+    } else if (busyness >= 0.26) {
         blurStrength = 1;
     }
 
@@ -519,4 +564,8 @@ function clamp(v, min, max) {
 
 function round2(v) {
     return Math.round(v * 100) / 100;
+}
+
+function round3(v) {
+    return Math.round(v * 1000) / 1000;
 }

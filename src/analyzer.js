@@ -304,7 +304,7 @@ export async function analyzeImagePalette({
         onLog('正在用本地色彩算法生成方案…', 'loading', 'step-gen');
         const rawPalette = generateLocalPalette(sampleData, stylePreference);
         const { palette, warnings } = normalizeAndValidatePalette(rawPalette);
-        onLog('✓ 本地离线配色完成（未消耗任何 API）', 'ok', 'step-gen');
+        onLog(`✓ 本地离线配色完成（建议模糊度 ${palette.blur_strength}，未消耗任何 API）`, 'ok', 'step-gen');
         return { palette, warnings, sampleData };
     }
 
