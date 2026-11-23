@@ -194,14 +194,17 @@ export async function saveThemeViaApi(name, themeObj, deps) {
 }
 
 /**
- * 将主题颜色、CSS 和模糊强度实时应用到当前页面与 power_user
+ * 将主题颜色、CSS 和模糊强度实时应用到当前页面
+ * @param {object} theme
+ * @param {object} deps
+ * @param {{ persist?: boolean }} options persist=false 时仅做实时预览，不写入 power_user 与设置文件
  */
-export function applyThemeColors(theme, deps) {
+export function applyThemeColors(theme, deps, { persist = true } = {}) {
     const { power_user, saveSettingsDebounced } = deps;
 
     for (const [key, selector, cssVar] of COLOR_FIELD_BINDINGS) {
         if (!theme[key]) continue;
-        power_user[key] = theme[key];
+        if (persist) power_user[key] = theme[key];
         document.documentElement.style.setProperty(cssVar, theme[key]);
         const picker = document.querySelector(selector);
         if (picker) {
@@ -209,10 +212,11 @@ export function applyThemeColors(theme, deps) {
         }
     }
 
-    power_user.custom_css = theme.custom_css || '';
+    const nextCss = theme.custom_css || '';
+    if (persist) power_user.custom_css = nextCss;
     const customCssInput = document.getElementById('customCSS');
     if (customCssInput) {
-        customCssInput.value = power_user.custom_css;
+        customCssInput.value = nextCss;
     }
 
     let styleEl = document.getElementById('custom-style');
@@ -222,10 +226,10 @@ export function applyThemeColors(theme, deps) {
         styleEl.setAttribute('id', 'custom-style');
         document.head.appendChild(styleEl);
     }
-    styleEl.textContent = power_user.custom_css;
+    styleEl.textContent = nextCss;
 
     if (theme.blur_strength !== undefined) {
-        power_user.blur_strength = theme.blur_strength;
+        if (persist) power_user.blur_strength = theme.blur_strength;
         document.documentElement.style.setProperty('--blurStrength', String(theme.blur_strength));
         const counter = document.getElementById('blur_strength_counter');
         const slider = document.getElementById('blur_strength');
@@ -233,8 +237,8 @@ export function applyThemeColors(theme, deps) {
         if (slider) slider.value = theme.blur_strength;
     }
 
-    // 恢复下拉框选中项（用于撤销时同步主题名称）
-    if (theme.theme) {
+    // 恢复下拉框选中项（用于还原/撤销时同步主题名称）
+    if (persist && theme.theme) {
         const selectEl = document.getElementById('themes');
         if (selectEl) {
             const existing = Array.from(selectEl.options).find(opt => opt.value === theme.theme);
@@ -243,7 +247,9 @@ export function applyThemeColors(theme, deps) {
         power_user.theme = theme.theme;
     }
 
-    saveSettingsDebounced();
+    if (persist) {
+        saveSettingsDebounced();
+    }
 }
 
 /**

@@ -47,6 +47,8 @@ let currentPalette = null;
 let currentImageSource = ''; // URL 或压缩后的 Data URL
 let currentSourceKind = 'url'; // 'url' | 'bg' | 'local'
 let previousThemeSnapshot = null;
+let isPreviewing = false;
+let hasPersistedChange = false;
 
 // ── 安全日志渲染（纯 textContent，防止 HTML 注入）────────────────────
 
@@ -125,6 +127,10 @@ function renderSwatches(palette) {
             currentPalette[key] = updated;
             swatch.style.backgroundColor = updated;
             swatch.title = `${label}: ${updated}（点击可微调）`;
+            // 若当前处于实时预览状态，拖动色块立即刷新页面效果
+            if (isPreviewing) {
+                previewCurrentPalette({ silent: true });
+            }
         });
 
         picker.addEventListener('change', () => {
@@ -161,8 +167,33 @@ function resetAnalysisState() {
     currentPalette = null;
     const paletteEl = document.getElementById('tp-palette');
     if (paletteEl) paletteEl.textContent = '';
-    $('#tp-apply, #tp-export-json, #tp-export-css').prop('disabled', true);
+    $('#tp-preview-theme, #tp-apply, #tp-export-json, #tp-export-css').prop('disabled', true);
     $('#tp-css-output-wrap').hide();
+}
+
+/** 仅在当前页面实时预览配色（不保存主题文件、不修改 settings.json） */
+async function previewCurrentPalette({ silent = false } = {}) {
+    if (!currentPalette) return;
+    const name = String($('#tp-theme-name').val() || '').trim() || '临时预览';
+
+    if (!previousThemeSnapshot) {
+        previousThemeSnapshot = snapshotCurrentTheme(power_user);
+    }
+
+    const themeObj = await buildThemeFromAnalysis({
+        themeName: name,
+        imageUrl: currentImageSource,
+        palette: currentPalette,
+        powerUser: power_user,
+        injectBg: true,
+    });
+    applyThemeColors(themeObj, ST_DEPS, { persist: false });
+    isPreviewing = true;
+    $('#tp-undo').show();
+
+    if (!silent) {
+        appendLog('✓ 已进入实时预览（未保存，点色块可实时微调，不满意点「还原」）', 'ok', 'saving');
+    }
 }
 
 function loadPreviewImage(source, kind = 'url') {
@@ -321,15 +352,18 @@ function renderPanel() {
                 <div id="tp-status" class="tp-status">等待载入背景图…</div>
             </div>
 
-            <!-- 区块三：输出与撤销 -->
+            <!-- 区块三：预览、保存与导出 -->
             <div class="tp-section tp-output-section">
                 <div class="tp-output-row">
                     <input id="tp-theme-name" class="text_pole tp-name-input" type="text" placeholder="主题名称" />
-                    <button id="tp-apply" class="menu_button" disabled>
-                        <i class="fa-solid fa-check"></i> 应用并保存
+                    <button id="tp-preview-theme" class="menu_button" disabled title="先在当前页面实时预览，不保存主题文件">
+                        <i class="fa-solid fa-eye"></i> 预览
                     </button>
-                    <button id="tp-undo" class="menu_button tp-undo-btn" style="display:none" title="恢复到应用改色盒子前的原主题">
-                        <i class="fa-solid fa-rotate-left"></i> 撤销
+                    <button id="tp-apply" class="menu_button" disabled title="将当前配色保存为正式主题并应用">
+                        <i class="fa-solid fa-floppy-disk"></i> 保存
+                    </button>
+                    <button id="tp-undo" class="menu_button tp-undo-btn" style="display:none" title="恢复到预览/应用前的原主题">
+                        <i class="fa-solid fa-rotate-left"></i> 还原
                     </button>
                 </div>
                 <div class="tp-export-row">
@@ -443,7 +477,7 @@ function bindEvents() {
             }
             showValidationResult(warnings, false);
 
-            $('#tp-apply, #tp-export-json, #tp-export-css').prop('disabled', false);
+            $('#tp-preview-theme, #tp-apply, #tp-export-json, #tp-export-css').prop('disabled', false);
         } catch (err) {
             appendLog(`✗ ${err.message}`, 'error');
             console.error('[Theme Painter]', err);
@@ -452,13 +486,23 @@ function bindEvents() {
         }
     });
 
-    // 应用并保存到酒馆
+    // 仅实时预览（不保存文件）
+    $('#tp-preview-theme').off('click').on('click', async () => {
+        if (!currentPalette) return;
+        try {
+            await previewCurrentPalette({ silent: false });
+        } catch (err) {
+            appendLog(`✗ 预览失败：${err.message}`, 'error', 'saving');
+            console.error('[Theme Painter]', err);
+        }
+    });
+
+    // 正式保存并应用到酒馆
     $('#tp-apply').off('click').on('click', async () => {
         if (!currentPalette) return;
         const name = String($('#tp-theme-name').val() || '').trim() || `改色主题_${Date.now()}`;
 
         try {
-            // 仅在尚未保存撤销点时记录原主题，连续微调应用多次仍能一键回到最初主题
             if (!previousThemeSnapshot) {
                 previousThemeSnapshot = snapshotCurrentTheme(power_user);
             }
@@ -472,26 +516,30 @@ function bindEvents() {
                 injectBg: true,
             });
             await saveThemeViaApi(name, themeObj, ST_DEPS);
-            applyThemeColors(themeObj, ST_DEPS);
+            applyThemeColors(themeObj, ST_DEPS, { persist: true });
+            isPreviewing = false;
+            hasPersistedChange = true;
 
             $('#tp-undo').show();
             appendLog(`✓ 主题「${name}」已保存并应用（已保留你的头像与布局设置）`, 'ok', 'saving');
-            toastr.success(`主题「${name}」已应用`, 'Theme Painter');
+            toastr.success(`主题「${name}」已保存并应用`, 'Theme Painter');
         } catch (err) {
             appendLog(`✗ 保存失败：${err.message}`, 'error', 'saving');
             console.error('[Theme Painter]', err);
         }
     });
 
-    // 一键撤销恢复原主题
+    // 一键还原至预览/应用前的原主题
     $('#tp-undo').off('click').on('click', () => {
         if (!previousThemeSnapshot) return;
-        applyThemeColors(previousThemeSnapshot, ST_DEPS);
+        applyThemeColors(previousThemeSnapshot, ST_DEPS, { persist: hasPersistedChange });
         const restoredName = previousThemeSnapshot.theme || '原主题';
         previousThemeSnapshot = null;
+        isPreviewing = false;
+        hasPersistedChange = false;
         $('#tp-undo').hide();
-        appendLog(`↺ 已恢复至「${restoredName}」`, 'ok', 'saving');
-        toastr.info(`已恢复原主题「${restoredName}」`, 'Theme Painter');
+        appendLog(`↺ 已还原至「${restoredName}」`, 'ok', 'saving');
+        toastr.info(`已还原原主题「${restoredName}」`, 'Theme Painter');
     });
 
     // 导出完整主题 JSON
