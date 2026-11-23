@@ -45,6 +45,12 @@ export const COLOR_FIELD_BINDINGS = [
 ];
 
 let cachedBoxCss = null;
+const sessionSavedThemes = new Map();
+
+/** 获取本次会话中由改色盒子保存的新主题（用于不刷新页面时来回切换兜底） */
+export function getSessionSavedTheme(name) {
+    return sessionSavedThemes.get(name) || null;
+}
 
 /**
  * 动态读取插件根目录的 duosetbox.css（同源静态文件）并缓存，消除 1156 行硬编码冗余
@@ -162,10 +168,10 @@ export function snapshotCurrentTheme(powerUser) {
 }
 
 /**
- * 保存主题到酒馆后端并安全更新下拉列表（免疫主题名中的引号/特殊字符）
+ * 保存主题到酒馆后端、同步更新内存主题列表与下拉框（免疫主题名中的引号/特殊字符）
  */
 export async function saveThemeViaApi(name, themeObj, deps) {
-    const { getRequestHeaders, power_user, saveSettingsDebounced } = deps;
+    const { getRequestHeaders, power_user, saveSettingsDebounced, themesList } = deps;
     const response = await fetch('/api/themes/save', {
         method: 'POST',
         headers: getRequestHeaders(),
@@ -175,6 +181,20 @@ export async function saveThemeViaApi(name, themeObj, deps) {
         throw new Error(`主题保存失败 (${response.status})`);
     }
 
+    // 1. 写入插件会话缓存，确保不刷新页面切去其他主题再切回来也能生效
+    sessionSavedThemes.set(name, themeObj);
+
+    // 2. 若酒馆导出了内存 themes 数组，同步写入或更新对应项
+    if (Array.isArray(themesList)) {
+        const idx = themesList.findIndex(t => t && t.name === name);
+        if (idx >= 0) {
+            themesList[idx] = themeObj;
+        } else {
+            themesList.push(themeObj);
+        }
+    }
+
+    // 3. 安全更新 #themes 下拉列表
     const selectEl = document.getElementById('themes');
     if (selectEl) {
         const existing = Array.from(selectEl.options).find(opt => opt.value === name);

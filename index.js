@@ -2,7 +2,7 @@
 // 本地 Canvas 精准取色 + AI 审美搭配，基于「双色盒子」结构生成匹配背景图的 SillyTavern 主题
 
 import { getContext, extension_settings } from '../../../extensions.js';
-import { power_user } from '../../../power-user.js';
+import * as PowerUserModule from '../../../power-user.js';
 import { getRequestHeaders, saveSettingsDebounced } from '../../../../script.js';
 import { oai_settings } from '../../../openai.js';
 
@@ -19,14 +19,18 @@ import {
     buildThemeFromAnalysis,
     snapshotCurrentTheme,
     saveThemeViaApi,
+    getSessionSavedTheme,
     applyThemeColors,
     downloadThemeJson,
 } from './src/theme.js';
+
+const { power_user } = PowerUserModule;
 
 const ST_DEPS = {
     getContext,
     extension_settings,
     power_user,
+    themesList: Array.isArray(PowerUserModule.themes) ? PowerUserModule.themes : null,
     getRequestHeaders,
     saveSettingsDebounced,
     oai_settings,
@@ -396,6 +400,18 @@ function renderPanel() {
 // ── 事件绑定 ──────────────────────────────────────────────────────
 
 function bindEvents() {
+    // 监听酒馆原生主题切换：如果切回本次会话新建的主题且酒馆内存尚未加载，兜底自动应用
+    $('#themes').off('change.themePainter').on('change.themePainter', function () {
+        const selectedName = String($(this).val() || '');
+        const cachedTheme = getSessionSavedTheme(selectedName);
+        if (!cachedTheme) return;
+        setTimeout(() => {
+            if (String($('#themes').val() || '') === selectedName) {
+                applyThemeColors(cachedTheme, ST_DEPS, { persist: true });
+            }
+        }, 0);
+    });
+
     // 折叠/展开面板
     $('#tp-toggle').off('click').on('click', () => {
         const $body = $('#tp-body');
