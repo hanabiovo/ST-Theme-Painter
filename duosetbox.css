@@ -1089,7 +1089,7 @@ body.no-blur #send_form,
 }
 
 #send_form textarea::placeholder {
-  color: color(var(--text-color-sec)) !important;
+  color: var(--text-color-sec) !important;
 }
 
 #send_form .fa-solid {

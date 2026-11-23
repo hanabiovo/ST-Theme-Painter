@@ -1,8 +1,8 @@
-/* ── Theme Painter · 改色盒子 ── */
+/* ── Theme Painter · 改色盒子 v2.0 ── */
 
 #theme-painter-panel {
     margin-top: 16px;
-    border: 1px solid var(--SmartThemeBorderColor, rgba(0,0,0,0.12));
+    border: 1px solid var(--SmartThemeBorderColor, rgba(0, 0, 0, 0.12));
     border-radius: 8px;
     background: var(--SmartThemeBlurTintColor, #fff);
     overflow: hidden;
@@ -21,7 +21,7 @@
 }
 
 .tp-toggle-header:hover {
-    background: rgba(128,128,128,0.06);
+    background: rgba(128, 128, 128, 0.06);
 }
 
 .tp-title-left {
@@ -33,7 +33,7 @@
 .tp-title-icon {
     color: var(--SmartThemeQuoteColor, #888);
     font-size: 0.9em;
-    opacity: 0.8;
+    opacity: 0.85;
 }
 
 .tp-title-text {
@@ -68,29 +68,57 @@
     gap: 10px;
 }
 
-/* ── 区块通用 ── */
 .tp-section {
     display: flex;
     flex-direction: column;
     gap: 7px;
 }
 
-/* ── 区块一：输入 ── */
+/* ── 区块一：输入与选项 ── */
 .tp-row {
     display: flex;
-    gap: 6px;
+    gap: 5px;
     align-items: center;
 }
 
 #tp-image-url {
     flex: 1;
+    min-width: 0;
     font-size: 0.84em;
 }
 
 .tp-icon-btn {
     flex-shrink: 0;
-    padding: 5px 10px !important;
-    font-size: 0.95em !important;
+    padding: 5px 9px !important;
+    font-size: 0.9em !important;
+}
+
+.tp-options-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.tp-select {
+    font-size: 0.8em !important;
+    padding: 3px 6px !important;
+    margin: 0 !important;
+    flex: 1;
+    min-width: 110px;
+}
+
+.tp-checkbox-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 0.8em;
+    color: var(--SmartThemeBodyColor, #444);
+    opacity: 0.85;
+    cursor: pointer;
+    user-select: none;
+    white-space: nowrap;
 }
 
 .tp-analyze-btn {
@@ -105,17 +133,17 @@
     border-color: color-mix(in srgb, var(--SmartThemeQuoteColor, #7c9) 35%, transparent) !important;
 }
 
-/* ── 区块二：预览 ── */
+/* ── 区块二：预览与可编辑色卡 ── */
 .tp-preview-wrap {
     position: relative;
     border-radius: 6px;
     overflow: hidden;
-    border: 1px solid var(--SmartThemeBorderColor, rgba(0,0,0,0.1));
+    border: 1px solid var(--SmartThemeBorderColor, rgba(0, 0, 0, 0.1));
 }
 
 #tp-preview-img {
     width: 100%;
-    max-height: 130px;
+    max-height: 140px;
     object-fit: cover;
     display: none;
     vertical-align: bottom;
@@ -124,7 +152,13 @@
 #tp-palette {
     display: flex;
     width: 100%;
-    height: 22px;
+    height: 26px;
+    background-image: linear-gradient(45deg, rgba(128, 128, 128, 0.15) 25%, transparent 25%),
+        linear-gradient(-45deg, rgba(128, 128, 128, 0.15) 25%, transparent 25%),
+        linear-gradient(45deg, transparent 75%, rgba(128, 128, 128, 0.15) 75%),
+        linear-gradient(-45deg, transparent 75%, rgba(128, 128, 128, 0.15) 75%);
+    background-size: 10px 10px;
+    background-position: 0 0, 0 5px, 5px -5px, -5px 0;
 }
 
 #tp-palette:empty {
@@ -132,12 +166,14 @@
 }
 
 .tp-swatch {
+    position: relative;
     flex: 1;
     height: 100%;
-    border: none;
-    border-right: 1px solid rgba(255,255,255,0.15);
-    cursor: help;
-    transition: flex 0.2s;
+    margin: 0;
+    border-right: 1px solid rgba(255, 255, 255, 0.2);
+    cursor: pointer;
+    transition: flex 0.2s ease;
+    display: block;
 }
 
 .tp-swatch:last-child {
@@ -146,6 +182,17 @@
 
 .tp-swatch:hover {
     flex: 1.6;
+}
+
+.tp-swatch-picker {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    opacity: 0;
+    cursor: pointer;
+    border: none;
+    padding: 0;
 }
 
 .tp-status {
@@ -157,6 +204,7 @@
 
 .tp-log-line {
     line-height: 1.6;
+    word-break: break-word;
 }
 
 .tp-log-line.error {
@@ -167,8 +215,14 @@
     color: #c8882a;
 }
 
-/* ── 区块三：输出 ── */
-.tp-output-row {
+.tp-log-line.ok {
+    color: var(--SmartThemeBodyColor, #444);
+    opacity: 0.85;
+}
+
+/* ── 区块三：输出与导出 ── */
+.tp-output-row,
+.tp-export-row {
     display: flex;
     gap: 6px;
     align-items: center;
@@ -176,21 +230,33 @@
 }
 
 .tp-name-input {
-    width: 7em !important;
+    width: 7.5em !important;
     flex-shrink: 0;
     font-size: 0.84em;
 }
 
-.tp-output-row .menu_button {
+.tp-output-row .menu_button,
+.tp-export-row .menu_button {
     flex: 1;
     font-size: 0.8em !important;
     padding: 5px 8px !important;
     white-space: nowrap;
 }
 
+.tp-undo-btn {
+    flex: 0 0 auto !important;
+}
+
 #tp-css-output-wrap {
     display: none;
     margin-top: 2px;
+}
+
+.tp-css-hint {
+    font-size: 0.74em;
+    opacity: 0.7;
+    margin-bottom: 4px;
+    color: var(--SmartThemeBodyColor, #555);
 }
 
 #tp-css-output {
@@ -218,9 +284,11 @@
     border-radius: 50%;
     animation: tp-spin 0.7s linear infinite;
     vertical-align: middle;
-    margin-right: 3px;
+    margin-right: 5px;
 }
 
 @keyframes tp-spin {
-    to { transform: rotate(360deg); }
+    to {
+        transform: rotate(360deg);
+    }
 }
